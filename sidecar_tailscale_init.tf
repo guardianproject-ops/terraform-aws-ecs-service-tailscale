@@ -54,7 +54,7 @@ module "tailscale_init_sidecar" {
     logDriver = "awslogs"
     options = {
       "awslogs-group"         = aws_cloudwatch_log_group.tailscale_init[0].name
-      "awslogs-region"        = var.aws_region
+      "awslogs-region"        = data.aws_region.this.name
       "awslogs-stream-prefix" = "ecs"
     }
   }

@@ -1,6 +1,8 @@
 variable "vpc_id" {
-  type = string
+  type        = string
+  description = "The VPC that the ECS cluster is in"
 }
+
 variable "kms_key_arn" {
   type        = string
   description = "Used for transit and tailscale state encryption"
@@ -55,20 +57,15 @@ The port number for Tailscale health check endpoint
 EOT
 }
 
-variable "aws_region" {
-  type = string
-}
-
-
-variable "tailscale_tags_keycloak" {
+variable "tailscale_tags" {
   type = list(string)
 
   description = "The list of tags that will be assigned to tailscale node created by this stack."
   validation {
     condition = alltrue([
-      for tag in var.tailscale_tags_keycloak : can(regex("^tag:", tag))
+      for tag in var.tailscale_tags : can(regex("^tag:", tag))
     ])
-    error_message = "max_allocated_storage: Each tag in tailscale_tags_keycloak must start with 'tag:'"
+    error_message = "max_allocated_storage: Each tag in tailscale_tags must start with 'tag:'"
   }
 }
 
@@ -84,7 +81,7 @@ EOT
 variable "tailscale_client_id" {
   type        = string
   sensitive   = true
-  description = "The OIDC client id for tailscale that has permissions to create auth keys with the `tailscale_tags_keycloak` tags"
+  description = "The OIDC client id for tailscale that has permissions to create auth keys with the `tailscale_tags` tags"
 }
 
 variable "tailscale_client_secret" {
@@ -150,7 +147,8 @@ EOT
 
 
 variable "ecs_cluster_arn" {
-  type = string
+  type        = string
+  description = "The ECS cluster ARN this service will be deployed in"
 }
 
 variable "tailscale_hostname" {
@@ -170,19 +168,28 @@ EOT
 }
 
 variable "tailscale_ssh_enabled" {
-  type    = bool
-  default = true
+  type        = bool
+  description = "Whether to enable tailscale ssh into the tailscale node"
+  default     = true
 }
 
 variable "tailscale_extra_args" {
-  type    = list(string)
-  default = []
+  type        = list(string)
+  description = <<EOT
+TS_EXTRA_ARGS Any other flags to pass in to the Tailscale CLI in a tailscale set command.
+See https://tailscale.com/kb/1080/cli#set
+EOT
+  default     = []
 }
 
-
 variable "tailscaled_extra_args" {
-  type    = list(string)
-  default = null
+  type        = list(string)
+  default     = null
+  description = <<EOT
+TS_TAILSCALED_EXTRA_ARGS
+Any other flags to pass in to tailscaled.
+See https://tailscale.com/kb/1278/tailscaled#flags-to-tailscaled
+EOT
 }
 
 variable "tailscale_routes" {

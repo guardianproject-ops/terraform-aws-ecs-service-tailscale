@@ -1,3 +1,4 @@
+data "aws_region" "this" {}
 locals {
   tailscale_environment = [
     {
@@ -226,7 +227,7 @@ module "tailscale_def" {
     logDriver = "awslogs"
     options = {
       "awslogs-group"         = aws_cloudwatch_log_group.tailscale[0].name
-      "awslogs-region"        = var.aws_region
+      "awslogs-region"        = data.aws_region.this.name
       "awslogs-stream-prefix" = "ecs"
     }
     secretOptions = null
@@ -282,7 +283,6 @@ module "tailscale_ingress" {
     }
   ]
 
-  # the container uses service connect to be able to dynamically reference the keycloak containers by dns "keycloak-web"
   service_connect_configurations = var.service_connect_configurations
   context                        = module.this.context
 }

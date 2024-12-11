@@ -54,7 +54,8 @@ It's 100% Open Source and licensed under the [GNU General Public License](LICENS
 
 This is a module for deploying tailscale as a standalone ECS service. It features:
 
-  * A lambda that rotates the auth key automatically using AWS Secrets Manager
+  * Bring your own ECS cluster, works with Fargate, only supports vpcmode networking
+  * A lambda that rotates the tailscale auth-key automatically using AWS Secrets Manager
   * Ability to `tailscale serve` an upstream in your cluster using AWS Service Connect
   * Automatic state persistence with AWS EFS
 
@@ -77,22 +78,21 @@ The table below correctly indicates which inputs are required.
 
 ```terraform
 module "db" {
-  source                              = "guardianproject-ops/ecs-service-tailscale/aws"
-  context = module.label_tailscale.context
-  vpc_id                       = var.vpc_id
-  kms_key_arn                  = local.kms_key_arn
-  private_subnet_ids           = var.private_subnet_ids
-  public_subnet_ids            = var.public_subnet_ids
-  tailscale_container_image    = var.tailscale_container_image
-  tailscale_serve_enabled      = true
-  tailscale_serve_upstream_url = "https+insecure://keycloak-web:${local.port_keycloak_web}"
-  aws_region                   = local.region
-  tailscale_tags_keycloak      = var.tailscale_tags_keycloak
-  tailscale_tailnet            = var.tailscale_tailnet
-  tailscale_client_id          = var.tailscale_client_id
-  tailscale_client_secret      = var.tailscale_client_secret
-  ecs_cluster_arn              = module.ecs_cluster.arn
-  tailscale_hostname           = "my-ts-task"
+  source                         = "guardianproject-ops/ecs-service-tailscale/aws"
+  context                        =  module.label_tailscale.context
+  vpc_id                         = var.vpc_id
+  kms_key_arn                    = local.kms_key_arn
+  private_subnet_ids             = var.private_subnet_ids
+  public_subnet_ids              = var.public_subnet_ids
+  tailscale_container_image      = var.tailscale_container_image
+  tailscale_serve_enabled        = true
+  tailscale_serve_upstream_url   = "http://my-ecs-service:8080"
+  tailscale_tags                 = var.tailscale_tags
+  tailscale_tailnet              = var.tailscale_tailnet
+  tailscale_client_id            = var.tailscale_client_id
+  tailscale_client_secret        = var.tailscale_client_secret
+  ecs_cluster_arn                = module.ecs_cluster.arn
+  tailscale_hostname             = "my-ts-task"
   service_connect_configurations = [{
     enabled   = true
     namespace = aws_service_discovery_http_namespace.this[0].arn
@@ -128,8 +128,8 @@ module "db" {
 |------|--------|---------|
 | <a name="module_label_log_group_tailscale"></a> [label\_log\_group\_tailscale](#module\_label\_log\_group\_tailscale) | cloudposse/label/null | 0.25.0 |
 | <a name="module_label_log_group_tailscale_init"></a> [label\_log\_group\_tailscale\_init](#module\_label\_log\_group\_tailscale\_init) | cloudposse/label/null | 0.25.0 |
+| <a name="module_label_rotate"></a> [label\_rotate](#module\_label\_rotate) | cloudposse/label/null | 0.25.0 |
 | <a name="module_label_ssm_params_tailscale"></a> [label\_ssm\_params\_tailscale](#module\_label\_ssm\_params\_tailscale) | cloudposse/label/null | 0.25.0 |
-| <a name="module_label_ts"></a> [label\_ts](#module\_label\_ts) | cloudposse/label/null | 0.25.0 |
 | <a name="module_tailscale_def"></a> [tailscale\_def](#module\_tailscale\_def) | cloudposse/ecs-container-definition/aws | 0.61.1 |
 | <a name="module_tailscale_ingress"></a> [tailscale\_ingress](#module\_tailscale\_ingress) | cloudposse/ecs-alb-service-task/aws | 0.76.1 |
 | <a name="module_tailscale_init_sidecar"></a> [tailscale\_init\_sidecar](#module\_tailscale\_init\_sidecar) | cloudposse/ecs-container-definition/aws | 0.61.1 |
@@ -160,6 +160,7 @@ module "db" {
 | [aws_vpc_security_group_ingress_rule.tailscale_to_efs_state_tailscale](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/vpc_security_group_ingress_rule) | resource |
 | [aws_iam_policy_document.tailscale_exec](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.tailscale_task](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
+| [aws_region.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
 
@@ -167,11 +168,10 @@ module "db" {
 |------|-------------|------|---------|:--------:|
 | <a name="input_additional_tag_map"></a> [additional\_tag\_map](#input\_additional\_tag\_map) | Additional key-value pairs to add to each map in `tags_as_list_of_maps`. Not added to `tags` or `id`.<br/>This is for some rare cases where resources want additional configuration of tags<br/>and therefore take a list of maps with tag key, value, and additional configuration. | `map(string)` | `{}` | no |
 | <a name="input_attributes"></a> [attributes](#input\_attributes) | ID element. Additional attributes (e.g. `workers` or `cluster`) to add to `id`,<br/>in the order they appear in the list. New attributes are appended to the<br/>end of the list. The elements of the list are joined by the `delimiter`<br/>and treated as a single ID element. | `list(string)` | `[]` | no |
-| <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | n/a | `string` | n/a | yes |
 | <a name="input_context"></a> [context](#input\_context) | Single object for setting entire context at once.<br/>See description of individual variables for details.<br/>Leave string and numeric variables as `null` to use default value.<br/>Individual variable settings (non-null) override settings in context object,<br/>except for attributes, tags, and additional\_tag\_map, which are merged. | `any` | <pre>{<br/>  "additional_tag_map": {},<br/>  "attributes": [],<br/>  "delimiter": null,<br/>  "descriptor_formats": {},<br/>  "enabled": true,<br/>  "environment": null,<br/>  "id_length_limit": null,<br/>  "label_key_case": null,<br/>  "label_order": [],<br/>  "label_value_case": null,<br/>  "labels_as_tags": [<br/>    "unset"<br/>  ],<br/>  "name": null,<br/>  "namespace": null,<br/>  "regex_replace_chars": null,<br/>  "stage": null,<br/>  "tags": {},<br/>  "tenant": null<br/>}</pre> | no |
 | <a name="input_delimiter"></a> [delimiter](#input\_delimiter) | Delimiter to be used between ID elements.<br/>Defaults to `-` (hyphen). Set to `""` to use no delimiter at all. | `string` | `null` | no |
 | <a name="input_descriptor_formats"></a> [descriptor\_formats](#input\_descriptor\_formats) | Describe additional descriptors to be output in the `descriptors` output map.<br/>Map of maps. Keys are names of descriptors. Values are maps of the form<br/>`{<br/>   format = string<br/>   labels = list(string)<br/>}`<br/>(Type is `any` so the map values can later be enhanced to provide additional options.)<br/>`format` is a Terraform format string to be passed to the `format()` function.<br/>`labels` is a list of labels, in order, to pass to `format()` function.<br/>Label values will be normalized before being passed to `format()` so they will be<br/>identical to how they appear in `id`.<br/>Default is `{}` (`descriptors` output will be empty). | `any` | `{}` | no |
-| <a name="input_ecs_cluster_arn"></a> [ecs\_cluster\_arn](#input\_ecs\_cluster\_arn) | n/a | `string` | n/a | yes |
+| <a name="input_ecs_cluster_arn"></a> [ecs\_cluster\_arn](#input\_ecs\_cluster\_arn) | The ECS cluster ARN this service will be deployed in | `string` | n/a | yes |
 | <a name="input_enabled"></a> [enabled](#input\_enabled) | Set to false to prevent the module from creating any resources | `bool` | `null` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | ID element. Usually used for region e.g. 'uw2', 'us-west-2', OR role 'prod', 'staging', 'dev', 'UAT' | `string` | `null` | no |
 | <a name="input_exec_enabled"></a> [exec\_enabled](#input\_exec\_enabled) | Specifies whether to enable Amazon ECS Exec for the tasks within the service | `bool` | `false` | no |
@@ -193,20 +193,20 @@ module "db" {
 | <a name="input_stage"></a> [stage](#input\_stage) | ID element. Usually used to indicate role, e.g. 'prod', 'staging', 'source', 'build', 'test', 'deploy', 'release' | `string` | `null` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Additional tags (e.g. `{'BusinessUnit': 'XYZ'}`).<br/>Neither the tag keys nor the tag values will be modified by this module. | `map(string)` | `{}` | no |
 | <a name="input_tailscale_accept_dns"></a> [tailscale\_accept\_dns](#input\_tailscale\_accept\_dns) | TS\_ACCEPT\_DNS Accept DNS configuration from the admin console. Not accepted by default. | `bool` | `false` | no |
-| <a name="input_tailscale_client_id"></a> [tailscale\_client\_id](#input\_tailscale\_client\_id) | The OIDC client id for tailscale that has permissions to create auth keys with the `tailscale_tags_keycloak` tags | `string` | n/a | yes |
+| <a name="input_tailscale_client_id"></a> [tailscale\_client\_id](#input\_tailscale\_client\_id) | The OIDC client id for tailscale that has permissions to create auth keys with the `tailscale_tags` tags | `string` | n/a | yes |
 | <a name="input_tailscale_client_secret"></a> [tailscale\_client\_secret](#input\_tailscale\_client\_secret) | The OIDC client secret paired with `tailscale_client_id` | `string` | n/a | yes |
 | <a name="input_tailscale_container_image"></a> [tailscale\_container\_image](#input\_tailscale\_container\_image) | The fully qualified container image for tailscale. | `string` | `"ghcr.io/tailscale/tailscale:stable"` | no |
-| <a name="input_tailscale_extra_args"></a> [tailscale\_extra\_args](#input\_tailscale\_extra\_args) | n/a | `list(string)` | `[]` | no |
+| <a name="input_tailscale_extra_args"></a> [tailscale\_extra\_args](#input\_tailscale\_extra\_args) | TS\_EXTRA\_ARGS Any other flags to pass in to the Tailscale CLI in a tailscale set command.<br/>See https://tailscale.com/kb/1080/cli#set | `list(string)` | `[]` | no |
 | <a name="input_tailscale_hostname"></a> [tailscale\_hostname](#input\_tailscale\_hostname) | The hostname for this tailscale device, will default to to the context id | `string` | `null` | no |
 | <a name="input_tailscale_routes"></a> [tailscale\_routes](#input\_tailscale\_routes) | TS\_ROUTES Advertise subnet routes. This is equivalent to tailscale set --advertise-routes=. | `string` | `null` | no |
 | <a name="input_tailscale_serve_enabled"></a> [tailscale\_serve\_enabled](#input\_tailscale\_serve\_enabled) | Whether to Serve | `bool` | `false` | no |
 | <a name="input_tailscale_serve_upstream_url"></a> [tailscale\_serve\_upstream\_url](#input\_tailscale\_serve\_upstream\_url) | The url to serve with tailscale serve | `string` | `null` | no |
-| <a name="input_tailscale_ssh_enabled"></a> [tailscale\_ssh\_enabled](#input\_tailscale\_ssh\_enabled) | n/a | `bool` | `true` | no |
-| <a name="input_tailscale_tags_keycloak"></a> [tailscale\_tags\_keycloak](#input\_tailscale\_tags\_keycloak) | The list of tags that will be assigned to tailscale node created by this stack. | `list(string)` | n/a | yes |
+| <a name="input_tailscale_ssh_enabled"></a> [tailscale\_ssh\_enabled](#input\_tailscale\_ssh\_enabled) | Whether to enable tailscale ssh into the tailscale node | `bool` | `true` | no |
+| <a name="input_tailscale_tags"></a> [tailscale\_tags](#input\_tailscale\_tags) | The list of tags that will be assigned to tailscale node created by this stack. | `list(string)` | n/a | yes |
 | <a name="input_tailscale_tailnet"></a> [tailscale\_tailnet](#input\_tailscale\_tailnet) | description = The tailnet domain (or "organization's domain") for your tailscale tailnet, this s found under Settings > General > Organization | `string` | n/a | yes |
-| <a name="input_tailscaled_extra_args"></a> [tailscaled\_extra\_args](#input\_tailscaled\_extra\_args) | n/a | `list(string)` | `null` | no |
+| <a name="input_tailscaled_extra_args"></a> [tailscaled\_extra\_args](#input\_tailscaled\_extra\_args) | TS\_TAILSCALED\_EXTRA\_ARGS<br/>Any other flags to pass in to tailscaled.<br/>See https://tailscale.com/kb/1278/tailscaled#flags-to-tailscaled | `list(string)` | `null` | no |
 | <a name="input_tenant"></a> [tenant](#input\_tenant) | ID element \_(Rarely used, not included by default)\_. A customer identifier, indicating who this instance of a resource is for | `string` | `null` | no |
-| <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | n/a | `string` | n/a | yes |
+| <a name="input_vpc_id"></a> [vpc\_id](#input\_vpc\_id) | The VPC that the ECS cluster is in | `string` | n/a | yes |
 
 ## Outputs
 
